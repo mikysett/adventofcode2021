@@ -98,11 +98,6 @@ fn calc_points_in_line(line: &Line) -> Vec<Point> {
 	println!("Delta x:{}    Delta y:{}", delta_x, delta_y);
 	println!("x step:{}     y step:{}", x_step, y_step);
 	
-	if delta_x != 0 && delta_y != 0 {
-		println!("DIAGONAL LINE SKIPPED FOR NOW");
-		return points;
-	}
-
 	for point_nb in 0..nb_steps + 1 {
 		points.push(Point {
 			x: line.p1.x + (point_nb as f64 * x_step) as i32,
