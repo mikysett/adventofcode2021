@@ -15,9 +15,21 @@ const NOT_SET: usize = 0;
 #[derive(Debug, PartialEq)]
 struct Packet {
 	version: usize,
-	type_id: usize,
+	type_id: TypeID,
 	len: usize,
 	info: PacketType,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum TypeID {
+	Sum,
+	Product,
+	Minimum,
+	Maximum,
+	SingleNumber,
+	GreaterThan,
+	LessThan,
+	EqualTo,
 }
 
 #[derive(Debug, PartialEq)]
@@ -63,12 +75,12 @@ fn main() {
 		.expect("Can't read the input file");
 
 	let mut input_bin = init_binary(&input_lines.flatten().next().unwrap(), hex_to_bin_table());
-	let mut packets: Vec<Packet> = Vec::new();
-	packets.push(parse_binaries(&mut input_bin));
+	let packets: Vec<Packet> = vec![parse_binaries(&mut input_bin)];
 
 	println!("packets: {:#?}", packets);
 
-	println!("Versions sum: {}", versions_sum(&packets.first().unwrap()));
+	println!("Versions sum: {}", versions_sum(packets.first().unwrap()));
+	println!("Calculated result: {}", calculate(packets.first().unwrap()));
 	// let (mut risk_map, last_pos) = init_map(input_lines);
 	// let last_pos = expand_map(&mut risk_map, &last_pos);
 
@@ -105,7 +117,7 @@ fn hex_to_bin_table() -> HashMap<char, String> {
 	hex_to_bin
 }
 
-fn init_binary(s: &String, hex_to_bin_table: HashMap<char, String>)
+fn init_binary(s: &str, hex_to_bin_table: HashMap<char, String>)
 	-> String {
 	let mut input_bin: String = String::new();
 
@@ -121,22 +133,22 @@ fn parse_binaries(mut binaries: &mut str) -> Packet {
 	let version = bin_to_usize(&binaries[..VERSION_SIZE]);
 	binaries = binaries.remove_from_start(VERSION_SIZE);
 
-	let type_id = bin_to_usize(&binaries[..TYPE_ID_SIZE]);
+	let type_id = usize_to_type_id(bin_to_usize(&binaries[..TYPE_ID_SIZE]));
 	binaries = binaries.remove_from_start(TYPE_ID_SIZE);
 
-	if type_id == 4 {
+	if type_id == TypeID::SingleNumber {
 		save_literal(&mut binaries, version, type_id, NOT_SET)
 	} else {
 		save_operator(&mut binaries, version, type_id)
 	}
 }
 
-fn save_literal(binaries: &mut str, version: usize, type_id: usize, packet_size: usize)
+fn save_literal(binaries: &mut str, version: usize, type_id: TypeID, packet_size: usize)
 	-> Packet {
 	let nb_chars;
 	
 	if packet_size == NOT_SET {
-		nb_chars = set_dynamic_size_nb(&binaries);
+		nb_chars = set_dynamic_size_nb(binaries);
 	} else {
 		nb_chars = binaries[0..packet_size - HEADER_SIZE].to_string();
 	}
@@ -171,7 +183,7 @@ fn set_dynamic_size_nb(binaries: &str) -> String {
 	nb_chars
 }
 
-fn save_operator(mut binaries: &mut str, version: usize, type_id: usize)
+fn save_operator(mut binaries: &mut str, version: usize, type_id: TypeID)
 	-> Packet {
 	let mut operator_packet: OperatorPacket = OperatorPacket::new();
 	let mut operator_len = VERSION_SIZE + TYPE_ID_SIZE + LENGTH_TYPE_SIZE;
@@ -243,18 +255,166 @@ fn bin_to_u128(s: &str) -> u128 {
 	int_nb
 }
 
+fn usize_to_type_id(nb: usize) -> TypeID {
+	match nb {
+		0 => TypeID::Sum,
+		1 => TypeID::Product,
+		2 => TypeID::Minimum,
+		3 => TypeID::Maximum,
+		4 => TypeID::SingleNumber,
+		5 => TypeID::GreaterThan,
+		6 => TypeID::LessThan,
+		_other => TypeID::EqualTo,
+	}
+}
+
 fn versions_sum(packet: &Packet) -> usize {
 	let mut sum: usize = packet.version;
 
 	match &packet.info {
 		PacketType::Operator(operator) => {
 			for sub_packet in &operator.sub_packets {
-				sum += versions_sum(&sub_packet);
+				sum += versions_sum(sub_packet);
 			}
 		},
 		PacketType::Literal(_) => (),
 	}
 	sum
+}
+
+fn calculate(packet: &Packet) -> u128 {
+	match &packet.info {
+		PacketType::Operator(operator) => {
+			match &packet.type_id {
+				TypeID::Sum => {
+					op_sum(&operator.sub_packets)
+				},
+				TypeID::Product => {
+					op_product(&operator.sub_packets)
+				},
+				TypeID::Minimum => {
+					op_minimum(&operator.sub_packets)
+				},
+				TypeID::Maximum => {
+					op_maximum(&operator.sub_packets)
+				},
+				TypeID::GreaterThan => {
+					op_greater_than(&operator.sub_packets)
+				},
+				TypeID::LessThan => {
+					op_less_than(&operator.sub_packets)
+				},
+				TypeID::EqualTo => {
+					op_equal_to(&operator.sub_packets)
+				},
+				_ => {
+					panic!("Unexpected typeID for an Operator")
+				}
+			}
+		},
+		PacketType::Literal(literal) => literal.number,
+	}
+}
+
+fn op_sum(packets: &[Packet]) -> u128 {
+	let mut sum = 0;
+
+	for packet in packets {
+		match &packet.info {
+			PacketType::Literal(info) => sum += info.number,
+			PacketType::Operator(_) => sum += calculate(packet),
+		}
+	}
+	sum
+}
+
+fn op_product(packets: &[Packet]) -> u128 {
+	let mut product = 1;
+
+	for packet in packets {
+		match &packet.info {
+			PacketType::Literal(info) => product *= info.number,
+			PacketType::Operator(_) => product *= calculate(packet),
+		}
+	}
+	product
+}
+
+fn op_minimum(packets: &[Packet]) -> u128 {
+	let mut numbers = Vec::new();
+
+	for packet in packets {
+		match &packet.info {
+			PacketType::Literal(info) => numbers.push(info.number),
+			PacketType::Operator(_) => numbers.push(calculate(packet)),
+		}
+	}
+	numbers.sort_unstable();
+	*numbers.first().unwrap()
+}
+
+fn op_maximum(packets: &[Packet]) -> u128 {
+	let mut numbers = Vec::new();
+
+	for packet in packets {
+		match &packet.info {
+			PacketType::Literal(info) => numbers.push(info.number),
+			PacketType::Operator(_) => numbers.push(calculate(packet)),
+		}
+	}
+	numbers.sort_unstable();
+	numbers.reverse();
+	*numbers.first().unwrap()
+}
+
+fn op_greater_than(packets: &[Packet]) -> u128 {
+	let (nb1, nb2) = take_two_numbers(packets);
+	if nb1 > nb2 {
+		1
+	}
+	else {
+		0
+	}
+}
+
+fn op_less_than(packets: &[Packet]) -> u128 {
+	let (nb1, nb2) = take_two_numbers(packets);
+	if nb1 < nb2 {
+		1
+	}
+	else {
+		0
+	}
+}
+
+fn op_equal_to(packets: &[Packet]) -> u128 {
+	let (nb1, nb2) = take_two_numbers(packets);
+	if nb1 == nb2 {
+		1
+	}
+	else {
+		0
+	}
+}
+
+fn take_two_numbers(packets: &[Packet]) -> (u128, u128) {
+	let nb1;
+	let nb2;
+
+	if packets.len() != 2 {
+		panic!("Comparison operators must have exaclty 2 parameters");
+	}
+	let packet1 = &packets[0];
+	match &packet1.info {
+		PacketType::Literal(info) => nb1 = info.number,
+		PacketType::Operator(_) => nb1 = calculate(packet1),
+	}
+	let packet2 = &packets[1];
+	match &packet2.info {
+		PacketType::Literal(info) => nb2 = info.number,
+		PacketType::Operator(_) => nb2 = calculate(packet2),
+	}
+	(nb1, nb2)
 }
 
 // Function taken from the Rust manual
