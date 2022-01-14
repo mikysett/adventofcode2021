@@ -69,18 +69,6 @@ fn main() {
 	println!("packets: {:#?}", packets);
 
 	println!("Versions sum: {}", versions_sum(&packets.first().unwrap()));
-	// let (mut risk_map, last_pos) = init_map(input_lines);
-	// let last_pos = expand_map(&mut risk_map, &last_pos);
-
-	// // print_map(&risk_map, &last_pos);
-
-	// init_scores(&mut risk_map, &last_pos, Position {x: 0, y: 0}, 0);
-	// // println!("Last position: {:?}", last_pos);
-	// calculate_risks(&mut risk_map, &last_pos, Position {x: 1, y: 0}, 0);
-	// calculate_risks(&mut risk_map, &last_pos, Position {x: 0, y: 1}, 0);
-	// println!("Best score for {:?}: {}",
-	// 	last_pos,
-	// 	risk_map.get(&last_pos).unwrap().best_score);
 }
 
 fn hex_to_bin_table() -> HashMap<char, String> {
